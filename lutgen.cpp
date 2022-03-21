@@ -16,6 +16,7 @@ const int c_width = 632;
 
 typedef cv::Matx<float, 3, 3> Mat3x3;
 typedef cv::Matx<float, 3, 4> Mat3x4;
+typedef cv::Matx<float, 4, 4> Mat4x4;
 typedef cv::Matx<float, 3, 1> Mat3x1;
 typedef cv::Matx<float, 4, 1> Mat4x1;
 
@@ -46,11 +47,34 @@ Mat3x3 homography_right (451.80908, 487.92169, -309131.16,
                          69.142822, 159.24678, -48727.828,
                          0.70764118, 0.18579695, -288.90326);
 
-Mat3x3 new_view (2, 2, 1,
-                 1, 1, 1,
-                 1, 1, 1);
+float cosx = 0.8660254038, sinx = 0.5;
+float cosy = 0.8660254038, siny = 0.5;
+float cosz = 0.8660254038, sinz = 0.5;
 
+Mat4x4 Front_rotation(1, 0, 0, 0,
+          0, cosx, -sinx, 0,
+          0, sinx, cosx ,0,
+          0,0,0,1);
 
+Mat4x4 Rear_rotation(1, 0, 0, 0,
+                      0, cosx, -sinx, 0,
+                      0, sinx, cosx ,0,
+                      0,0,0,1);
+
+Mat4x4 Right_rotation(cosy, 0, -siny,0,
+                    0, 1, 0,0,
+                    siny, 0, cosy,0,
+                    0,0,0,1);
+
+Mat4x4 Left_rotation(cosy, 0, -siny,0,
+                     0, 1, 0,0,
+                     siny, 0, cosy,0,
+                    0,0,0,1);
+
+Mat4x4 rotations[5] = {Front_rotation,
+                       Right_rotation,
+                       Rear_rotation,
+                       Left_rotation};
 
 Mat3x4 rot_t_rear;
 
@@ -60,22 +84,16 @@ Mat3x4 rot_t_front;
 
 Mat3x4 rot_t_right;
 
+enum Views
+{
+    TOP_VIEW= 0,
+    FRONT_VIEW = 1,
+    RIGHT_VIEW = 2,
+    REAR_VIEW = 3,
+    LEFT_VIEW = 4
+};
 
-Mat3x3 nastya_mul_matrix( Mat3x3 a, Mat3x3 b) {
-
-    return a.mul(b);
-}
-
-//void generate_new_matrix() {
-//    homography_front = nastya_mul_matrix(homography_front1,new_view);
-//    print(homography_front1);
-//    cout << "\n\n";
-//    print(homography_front);
-//    cout << "\n\n";
-//    homography_right = nastya_mul_matrix(homography_right1,new_view);
-//    homography_left = nastya_mul_matrix(homography_left1,new_view);
-//    homography_rear = nastya_mul_matrix(homography_rear1,new_view);
-//}
+Views current_mode = TOP_VIEW;
 
 template<typename T> int sign(T val)
 {
@@ -114,27 +132,24 @@ struct Pose {
                   rmat.val[6], rmat.val[7], rmat.val[8], tvec.val[2]);
         return j;
     }
-
     Mat3x3 rmat;
     Mat3x1 tvec;
 };
 
-Mat3x4 decompose_homography(Mat3x3& H)
-{
+Mat3x4 decompose_homography(Mat3x3& H) {
     H = inv_k_matrix * H;
     const int sgn = sign(cv::determinant(H));
-    const float norm_coeff = (float)sgn * 2.0f / (float)(norm(H.col(0)) + norm(H.col(1)));
-    const Mat3x3& P = H * norm_coeff;
+    const float norm_coeff = (float) sgn * 2.0f / (float) (norm(H.col(0)) + norm(H.col(1)));
+    const Mat3x3 &P = H * norm_coeff;
 
-    const Mat3x1& ex = P.col(0);
-    const Mat3x1& ey = P.col(1);
-    const Mat3x1& ez = cross(ex, ey);
+    const Mat3x1 &ex = P.col(0);
+    const Mat3x1 &ey = P.col(1);
+    const Mat3x1 &ez = cross(ex, ey);
 
     Mat3x3 R = from_cols(ex, ey, ez);
-    const Mat3x1& t = P.col(2);
 
+    Mat3x1 t = P.col(2);
     Pose rot_tr(R, t);
-    //rot_tr.inv();
     Mat3x4 m = rot_tr.get_matx();
 
     return m;
@@ -147,14 +162,17 @@ float distance(float x1, float y1, float x2, float y2) {
 #define SQR(x) ((x)*(x))
 
 float generate_z(int x, int y) {
-    const float R0 = 250;
-    const float K = -0.005f;
-    float r = distance(316, 360, (float)x, (float)y);
-    return  r >= R0 ? K*SQR(r-R0) :0;
+    float R0;
+    if (current_mode == TOP_VIEW)
+        R0 = 250;//250 for top views
+    else
+        R0 = 150;
+    const float K = -0.003f;
+    float r = distance(316, 360, (float) x, (float) y);
+    return r >= R0 ? K * SQR(r - R0) : 0;
 }
 
 Mat3x1 distort(Mat3x1 coord) {
-    //coord = dot(inv_k_matrix, coord);
     Mat points(2 ,1 ,CV_32FC2);
     points.at<Vec2f>(0,0)[0] = coord.val[0];
     points.at<Vec2f>(0,0)[1] = coord.val[1];
@@ -193,8 +211,8 @@ void savetxt(const char *file, Mat lut, int coord)
 void create_luts_file(Mat3x4 rot_t, const char *file) {
     Mat4x1 top_view_coord;
     Mat lut (c_height ,c_width ,CV_32FC2);
-    string x_file(R"(C:\Users\Lenovo Y 520\Desktop\dataset\)");
-    string y_file(R"(C:\Users\Lenovo Y 520\Desktop\dataset\)");
+    string x_file;//(R"(C:\Users\Lenovo Y 520\Desktop\dataset\)");
+    string y_file;//(R"(C:\Users\Lenovo Y 520\Desktop\dataset\)");
 
     x_file += file;
     y_file += file;
@@ -224,16 +242,55 @@ void generate_luts() {
     create_luts_file(rot_t_left,"luts_left");
 }
 
+Mat3x4 get_rot_tr(Mat3x3& homo)
+{
+    Mat3x4 rotation_translation_matrix = decompose_homography(homo);
+    if(current_mode == TOP_VIEW)
+        return rotation_translation_matrix;
+    else
+        return rotation_translation_matrix * rotations[current_mode-1];
+}
+
+
 void generate_rot_t_mat(){
-    rot_t_front = decompose_homography(homography_front);
-    rot_t_right = decompose_homography(homography_right);
-    rot_t_rear = decompose_homography(homography_rear);
-    rot_t_left = decompose_homography(homography_left);
+    rot_t_front = get_rot_tr(homography_front);
+    rot_t_right = get_rot_tr(homography_right);
+    rot_t_rear = get_rot_tr(homography_rear);
+    rot_t_left = get_rot_tr(homography_left);
+}
+
+void set_mode (int mode)
+{
+    if(mode == 0)
+        current_mode = TOP_VIEW;
+    else if(mode == 1)
+        current_mode = FRONT_VIEW;
+    else if(mode == 2)
+        current_mode = RIGHT_VIEW;
+    else if(mode == 3)
+        current_mode = REAR_VIEW;
+    else if(mode == 4)
+        current_mode = LEFT_VIEW;
+    else
+        exit(mode);
+}
+
+void define_mode()
+{
+    cout << "Choose view:\n"
+            "1 - Top view\n"
+            "2 - Front view\n"
+            "3 - Right view\n"
+            "4 - Rear view\n"
+            "5 - Left view\n";
+
+    int mode = getc(stdin) - '0' - 1;
+    set_mode(mode);
 }
 
 void create_luts() {
+    define_mode();
     inv_k_matrix = k_matrix.inv();
-    ///generate_new_matrix();
     generate_rot_t_mat();
     generate_luts();
 }
