@@ -17,12 +17,6 @@ Mat rear_image;
 Mat left_image;
 Mat alpha_map;
 
-string front_path ("front.png");
-string right_path ("right.png");
-string rear_path ("rear.png");
-string left_path ("left.png");
-string alpha_path ("alpha.jpg");
-
 Mat dataset[4][2];
 
 Mat top_view(c_height,c_width, CV_32FC3);
@@ -113,10 +107,7 @@ void  form_image() {
             top_view.at<Vec3f>(y,x) = get_pixel_color(x, y);
 }
 
-void read_luts(Mat& lut, const char* name, int channel) {
-    string fileName;// = R"(C:\Users\Lenovo Y 520\Desktop\dataset\)";
-    fileName += name;
-    cout<<fileName<<endl;
+void read_luts(Mat& lut, const string& fileName, int channel) {
     ifstream coord_table;
     float coord;
     coord_table.open(fileName.c_str(), std::ifstream::in);
@@ -129,39 +120,39 @@ void read_luts(Mat& lut, const char* name, int channel) {
 
 void get_luts()
 {
-    read_luts(lut_front, "luts_front_x.txt", 0);
-    read_luts(lut_front, "luts_front_y.txt", 1);
+    read_luts(lut_front, string("luts_front_x.txt"), 0);
+    read_luts(lut_front, string("luts_front_y.txt"), 1);
     CV_Assert(!lut_front.empty());
 
-    read_luts(lut_right, "luts_right_x.txt", 0);
-    read_luts(lut_right, "luts_right_y.txt", 1);
+    read_luts(lut_right, string("luts_right_x.txt"), 0);
+    read_luts(lut_right, string("luts_right_y.txt"), 1);
     CV_Assert(!lut_right.empty());
 
-    read_luts(lut_rear, "luts_rear_x.txt", 0);
-    read_luts(lut_rear, "luts_rear_y.txt", 1);
+    read_luts(lut_rear, string("luts_rear_x.txt"), 0);
+    read_luts(lut_rear, string("luts_rear_y.txt"), 1);
     CV_Assert(!lut_rear.empty());
 
-    read_luts(lut_left, "luts_left_x.txt", 0);
-    read_luts(lut_left, "luts_left_y.txt", 1);
+    read_luts(lut_left, string("luts_left_x.txt"), 0);
+    read_luts(lut_left, string("luts_left_y.txt"), 1);
     CV_Assert(!lut_left.empty());
 
 }
 
-void read_images()
+void read_images(const string& path)
 {
-    front_image = imread(front_path);
+    front_image = imread(path + "front.png");
     CV_Assert(!front_image.empty());
 
-    right_image = imread(right_path);
+    right_image = imread(path + "right.png");
     CV_Assert(!right_image.empty());
 
-    rear_image = imread(rear_path);
+    rear_image = imread(path + "rear.png");
     CV_Assert(!rear_image.empty());
 
-    left_image = imread(left_path);
+    left_image = imread(path + "left.png");
     CV_Assert(!left_image.empty());
 
-    alpha_map = imread(alpha_path, IMREAD_GRAYSCALE);
+    alpha_map = imread(path + "alpha.jpg", IMREAD_GRAYSCALE);
     CV_Assert(!alpha_map.empty());
 
     dataset[0][0] = dataset[1][0] = front_image;
@@ -170,15 +161,34 @@ void read_images()
     dataset[0][1] = dataset[3][1] = left_image;
 }
 
+void read_images()
+{
+    read_images(string(""));
+}
+
 void print_info()
 {
-    cout << "The images should be in the folder with the .exe file\n"<<"Press any key"<<endl;
+    cout << "The images must be located in the folder with the .exe file."
+            "If you need to change the location of the files, use the command line arguments "
+            "by specifying the path of the form \"C:\\Path\\to\\my\\directory\". "
+            "The dataset files should be named \"front.png\", \"right.png\""
+            ", \"rar.png\", \"left.png\", \"alpha.img\"."<<"Press any key"<<endl;
     getchar();
 
 }
 
-int main() {
-    print_info();
+int main(int argc, char* argv[]) {
+
+    if(argc < 2) {
+        print_info();
+        read_images();
+    }
+    else
+    {
+        cout << argv[1] << endl;
+        read_images(string(argv[1])+"\\");
+    }
+
     read_images();
     create_luts();
     resize(alpha_map, alpha_map, top_view.size(), 0, 0, INTER_LINEAR);
