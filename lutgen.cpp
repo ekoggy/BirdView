@@ -49,32 +49,31 @@ Mat3x3 homography_right (451.80908, 487.92169, -309131.16,
 
 float cosx = 0.8660254038, sinx = 0.5;
 float cosy = 0.8660254038, siny = 0.5;
-float cosz = 0.8660254038, sinz = 0.5;
 
-Mat4x4 Front_rotation(1, 0, 0, 0,
-          0, cosx, -sinx, 0,
-          0, sinx, cosx ,0,
-          0,0,0,1);
-
-Mat4x4 Rear_rotation(1, 0, 0, 0,
+Mat4x4 front_rotation(1, 0, 0, 0,
                       0, cosx, -sinx, 0,
-                      0, sinx, cosx ,0,
-                      0,0,0,1);
+                      0, sinx, cosx , 0,
+                      0, 0, 0, 1);
 
-Mat4x4 Right_rotation(cosy, 0, -siny,0,
-                    0, 1, 0,0,
-                    siny, 0, cosy,0,
-                    0,0,0,1);
+Mat4x4 rear_rotation(1, 0, 0, 0,
+                     0, cosx, -sinx, 0,
+                     0, sinx, cosx , 0,
+                     0, 0, 0, 1);
 
-Mat4x4 Left_rotation(cosy, 0, -siny,0,
-                     0, 1, 0,0,
-                     siny, 0, cosy,0,
-                    0,0,0,1);
+Mat4x4 right_rotation(cosy, 0, -siny, 0,
+                      0, 1, 0, 0,
+                      siny, 0, cosy, 0,
+                      0, 0, 0, 1);
 
-Mat4x4 rotations[5] = {Front_rotation,
-                       Right_rotation,
-                       Rear_rotation,
-                       Left_rotation};
+Mat4x4 left_rotation(cosy, 0, -siny, 0,
+                     0, 1, 0, 0,
+                     siny, 0, cosy, 0,
+                     0, 0, 0, 1);
+
+Mat4x4 rotations[5] = {front_rotation,
+                       right_rotation,
+                       rear_rotation,
+                       left_rotation};
 
 Mat3x4 rot_t_rear;
 
@@ -164,7 +163,7 @@ float distance(float x1, float y1, float x2, float y2) {
 float generate_z(int x, int y) {
     float R0;
     if (current_mode == TOP_VIEW)
-        R0 = 250;//250 for top views
+        R0 = 250;
     else
         R0 = 150;
     const float K = -0.003f;
@@ -211,8 +210,8 @@ void savetxt(const char *file, Mat lut, int coord)
 void create_luts_file(Mat3x4 rot_t, const char *file) {
     Mat4x1 top_view_coord;
     Mat lut (c_height ,c_width ,CV_32FC2);
-    string x_file;//(R"(C:\Users\Lenovo Y 520\Desktop\dataset\)");
-    string y_file;//(R"(C:\Users\Lenovo Y 520\Desktop\dataset\)");
+    string x_file;
+    string y_file;
 
     x_file += file;
     y_file += file;
