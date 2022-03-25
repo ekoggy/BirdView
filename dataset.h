@@ -5,6 +5,8 @@
 #ifndef BIRDVIEW_DATASET_H
 #define BIRDVIEW_DATASET_H
 #include <opencv2/opencv.hpp>
+#include "base_param.h"
+
 
 class Dataset {
 private:
@@ -12,12 +14,10 @@ private:
     cv::Mat top_view;
     cv::Mat alpha_map;
     cv::Mat luts[4][2];
-    int height;
-    int width;
 public:
-    Dataset();
-    int getHeight() const;
-    int getWigth() const;
+    BaseParam *imageParam;
+
+    Dataset(int newHeight, int newWidth);
     cv::Mat getLuts(int i, int j) const;
     cv::Mat getImages(int i, int j) const;
     cv::Mat getAlphaMap() const;

@@ -7,92 +7,126 @@
 using namespace cv;
 using namespace std;
 
-const int c_height = 720;
-const int c_width = 632;
-
-typedef cv::Matx<float, 3, 3> Mat3x3;
-typedef cv::Matx<float, 3, 4> Mat3x4;
-typedef cv::Matx<float, 4, 4> Mat4x4;
-typedef cv::Matx<float, 3, 1> Mat3x1;
-typedef cv::Matx<float, 4, 1> Mat4x1;
-
-Mat3x3 k_matrix(382.3707, 0, 639.5,
-                0, 382.37024, 479.5,
-                0, 0, 1);
-
-Mat3x3 inv_k_matrix;
-
-Mat4x1 d(0.052083842,
-         -0.0035262466,
-         -0.0070202388,
-         0.00057361444);
-
-Mat3x3 homography_rear(-384.61462, 622.73138, -168134.94,
-                       -2.7566094, 383.55063, -158343.05,
-                       -0.0035148675, 0.97545987, -452.9817);
-
-Mat3x3 homography_left(-484.8013, -314.50815, 251028.08,
-                       -103.96727, 81.012138, 30959.094,
-                       -0.74687731, 0.10087419, 196.08215);
-
-Mat3x3 homography_front (387.18942, -612.81183, 18701.828,
-                         7.2453871, -355.18347, 89363.391,
-                         0.0075790058, -0.96106231, 219.06621);
-
-Mat3x3 homography_right (451.80908, 487.92169, -309131.16,
-                         69.142822, 159.24678, -48727.828,
-                         0.70764118, 0.18579695, -288.90326);
-
-float cosx = 0.8660254038, sinx = 0.5;
-float cosy = 0.8660254038, siny = 0.5;
-
-Mat4x4 front_rotation(1, 0, 0, 0,
-                      0, cosx, -sinx, 0,
-                      0, sinx, cosx , 0,
-                      0, 0, 0, 1);
-
-Mat4x4 rear_rotation(1, 0, 0, 0,
-                     0, cosx, -sinx, 0,
-                     0, sinx, cosx , 0,
-                     0, 0, 0, 1);
-
-Mat4x4 right_rotation(cosy, 0, -siny, 0,
-                      0, 1, 0, 0,
-                      siny, 0, cosy, 0,
-                      0, 0, 0, 1);
-
-Mat4x4 left_rotation(cosy, 0, -siny, 0,
-                     0, 1, 0, 0,
-                     siny, 0, cosy, 0,
-                     0, 0, 0, 1);
-
-Mat4x4 rotations[5] = {front_rotation,
-                       right_rotation,
-                       rear_rotation,
-                       left_rotation};
-
-Mat3x4 rot_t_rear;
-
-Mat3x4 rot_t_left;
-
-Mat3x4 rot_t_front;
-
-Mat3x4 rot_t_right;
-
-enum Views
+LutGenerator::LutGenerator(int newHeight, int newWidth)
 {
-    TOP_VIEW= 0,
-    FRONT_VIEW = 1,
-    RIGHT_VIEW = 2,
-    REAR_VIEW = 3,
-    LEFT_VIEW = 4
-};
+    this->imageParam = new BaseParam(newHeight, newWidth);
 
-Views current_mode = TOP_VIEW;
+    this->kMatrix = Mat3x3(382.3707, 0, 639.5,
+                           0, 382.37024, 479.5,
+                           0, 0, 1);
 
-template<typename T> int sign(T val)
+    this->invKMatrix = this->kMatrix.inv();
+
+    this->d = Mat4x1 (0.052083842,
+                      -0.0035262466,
+                      -0.0070202388,
+                      0.00057361444);
+
+    this->homos[0] = Mat3x3 (387.18942, -612.81183, 18701.828,
+                             7.2453871, -355.18347, 89363.391,
+                             0.0075790058, -0.96106231, 219.06621);
+
+    this->homos[1] = Mat3x3 (451.80908, 487.92169, -309131.16,
+                             69.142822, 159.24678, -48727.828,
+                             0.70764118, 0.18579695, -288.90326);
+
+    this->homos[2] = Mat3x3 (-384.61462, 622.73138, -168134.94,
+                             -2.7566094, 383.55063, -158343.05,
+                             -0.0035148675, 0.97545987, -452.9817);
+
+    this->homos[3] = Mat3x3 (-484.8013, -314.50815, 251028.08,
+                             -103.96727, 81.012138, 30959.094,
+                             -0.74687731, 0.10087419, 196.08215);
+
+    float cosx = 0.8660254038, sinx = 0.5;
+    float cosy = 0.8660254038, siny = 0.5;
+
+    this->rotations[0] = Mat4x4 (1, 0, 0, 0,
+                          0, cosx, -sinx, 0,
+                          0, sinx, cosx , 0,
+                          0, 0, 0, 1);
+
+    this->rotations[1] = Mat4x4 (cosy, 0, -siny, 0,
+                                 0, 1, 0, 0,
+                                 siny, 0, cosy, 0,
+                                 0, 0, 0, 1);
+
+    this->rotations[2] = Mat4x4 (1, 0, 0, 0,
+                                 0, cosx, -sinx, 0,
+                                 0, sinx, cosx , 0,
+                                 0, 0, 0, 1);
+
+    this->rotations[3] = Mat4x4 (cosy, 0, -siny, 0,
+                                 0, 1, 0, 0,
+                                 siny, 0, cosy, 0,
+                                 0, 0, 0, 1);
+}
+
+Mat3x3 LutGenerator::getHomo(int index) const
 {
-    return (T(0) < val) - (val < T(0));
+    return this->homos[index];
+}
+
+Mat3x4 LutGenerator::getRotTr(int index) const
+{
+    return this->rotTr[index];
+}
+
+Mat4x4 LutGenerator::getRotation(int index) const
+{
+    return this->rotations[index];
+}
+
+Views LutGenerator::getMode() const
+{
+    return this->mode;
+}
+
+Mat3x3 LutGenerator::getK() const
+{
+    return this->kMatrix;
+}
+
+Mat3x3 LutGenerator::getInvK() const
+{
+    return this->invKMatrix;
+}
+
+Mat4x1 LutGenerator::getD() const
+{
+    return this->d;
+}
+
+void LutGenerator::setRotTr()
+{
+    this->rotTr[0] = getRotTr(this->homos[0]);
+    this->rotTr[1] = getRotTr(this->homos[1]);
+    this->rotTr[2] = getRotTr(this->homos[2]);
+    this->rotTr[3] = getRotTr(this->homos[3]);
+}
+
+void LutGenerator::setMode(int newMode)
+{
+    if(newMode == 0)
+        mode = TOP_VIEW;
+    else if(newMode == 1)
+        mode = FRONT_VIEW;
+    else if(newMode == 2)
+        mode = RIGHT_VIEW;
+    else if(newMode == 3)
+        mode = REAR_VIEW;
+    else if(newMode == 4)
+        mode = LEFT_VIEW;
+    else
+        exit(mode);
+}
+
+void LutGenerator::saveLuts()
+{
+    createLutsFile(this->rotTr[0], "luts_front");
+    createLutsFile(this->rotTr[1], "luts_right");
+    createLutsFile(this->rotTr[2], "luts_rear");
+    createLutsFile(this->rotTr[3], "luts_left");
 }
 
 Mat3x1 cross(const Mat3x1& a, const Mat3x1& b)
@@ -109,30 +143,8 @@ Mat3x3 from_cols(const Mat3x1& a, const Mat3x1& b, const Mat3x1& c)
     };
 }
 
-struct Pose {
-    Pose(const Mat3x3& rot, const Mat3x1& tr)
-            : rmat(rot),
-              tvec(tr)
-    {}
-
-    Pose inv() const
-    {
-        return Pose(rmat.t(), -rmat.t() * tvec);
-    }
-
-    Mat3x4 get_matx()
-    {
-        Mat3x4 j (rmat.val[0], rmat.val[1], rmat.val[2], tvec.val[0],
-                  rmat.val[3], rmat.val[4], rmat.val[5], tvec.val[1],
-                  rmat.val[6], rmat.val[7], rmat.val[8], tvec.val[2]);
-        return j;
-    }
-    Mat3x3 rmat;
-    Mat3x1 tvec;
-};
-
-Mat3x4 decompose_homography(Mat3x3& H) {
-    H = inv_k_matrix * H;
+Mat3x4 LutGenerator::decomposeHomography(Mat3x3& H) {
+    H = this->invKMatrix * H;
     const int sgn = sign(cv::determinant(H));
     const float norm_coeff = (float) sgn * 2.0f / (float) (norm(H.col(0)) + norm(H.col(1)));
     const Mat3x3 &P = H * norm_coeff;
@@ -150,15 +162,13 @@ Mat3x4 decompose_homography(Mat3x3& H) {
     return m;
 }
 
-float distance(float x1, float y1, float x2, float y2) {
+float LutGenerator::distance(float x1, float y1, float x2, float y2) {
     return sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2));
 }
 
-#define SQR(x) ((x)*(x))
-
-float generate_z(int x, int y) {
+float LutGenerator::generateZ(int x, int y) {
     float R0;
-    if (current_mode == TOP_VIEW)
+    if (this->mode == TOP_VIEW)
         R0 = 250;
     else
         R0 = 150;
@@ -167,34 +177,34 @@ float generate_z(int x, int y) {
     return r >= R0 ? K * SQR(r - R0) : 0;
 }
 
-Mat3x1 distort(Mat3x1 coord) {
+Mat3x1 LutGenerator::distort(Mat3x1 coord) {
     Mat points(2 ,1 ,CV_32FC2);
     points.at<Vec2f>(0,0)[0] = coord.val[0];
     points.at<Vec2f>(0,0)[1] = coord.val[1];
-    fisheye::distortPoints(points,points, k_matrix, d);
+    fisheye::distortPoints(points, points, this->kMatrix, d);
     coord.val[0] = points.at<Vec2f>(0,0)[0];
     coord.val[1] = points.at<Vec2f>(0,0)[1];
     return coord;
 }
 
-Mat4x1 create_top_view_col(int x, int y)
+Mat4x1 LutGenerator::createTopViewCol(int x, int y)
 {
-    Mat4x1 col((float)x,(float)y, generate_z(x ,y), 1);
+    Mat4x1 col((float)x, (float)y, generateZ(x, y), 1);
     return col;
 }
 
-Mat3x1 normalize_coord(Mat3x1 coord){
+Mat3x1 LutGenerator::normalizeCoord(Mat3x1 coord){
     coord.val[0] /= coord.val[2];
     coord.val[1] /= coord.val[2];
     coord.val[2] /= coord.val[2];
     return coord;
 }
 
-void savetxt(const char *file, Mat lut, int coord)
+void LutGenerator::saveData(const char *file, Mat lut, int coord)
 {
     ofstream fout(file);
-    for(int y = 0; y < c_height; y++) {
-        for (int x = 0; x < c_width; x++) {
+    for(int y = 0; y < this->imageParam->getHeight(); y++) {
+        for (int x = 0; x < this->imageParam->getWigth(); x++) {
             fout << lut.at<Vec2f>(y, x)[coord];
             fout << ' ';
         }
@@ -203,11 +213,12 @@ void savetxt(const char *file, Mat lut, int coord)
     fout.close();
 }
 
-void create_luts_file(Mat3x4 rot_t, const char *file) {
+void LutGenerator::createLutsFile(Mat3x4 rot_t, const char *file) {
     Mat4x1 top_view_coord;
-    Mat lut (c_height ,c_width ,CV_32FC2);
+    Mat lut (this->imageParam->getHeight() ,this->imageParam->getWigth() ,CV_32FC2);
     string x_file;
     string y_file;
+
 
     x_file += file;
     y_file += file;
@@ -215,62 +226,38 @@ void create_luts_file(Mat3x4 rot_t, const char *file) {
     x_file += "_x.txt";
     y_file += "_y.txt";
 
-    for(int y = 0; y < c_height; y++)
-        for(int x = 0; x < c_width; x++)
+    for(int y = 0; y < this->imageParam->getHeight(); y++)
+        for(int x = 0; x < this->imageParam->getWigth(); x++)
         {
-            top_view_coord = create_top_view_col(x, y);
+            top_view_coord = createTopViewCol(x, y);
             Mat3x1 coord = rot_t * top_view_coord;
-            coord = normalize_coord(coord);
+            coord = normalizeCoord(coord);
             coord = distort(coord);
             lut.at<Vec2f>(y, x)[0] = coord.val[0];
             lut.at<Vec2f>(y, x)[1] = coord.val[1];
         }
 
-    savetxt(x_file.c_str(), lut, 0);
-    savetxt(y_file.c_str(), lut, 1);
+    saveData(x_file.c_str(), lut, 0);
+    saveData(y_file.c_str(), lut, 1);
 }
 
-void generate_luts() {
-    create_luts_file(rot_t_front,"luts_front");
-    create_luts_file(rot_t_right,"luts_right");
-    create_luts_file(rot_t_rear,"luts_rear");
-    create_luts_file(rot_t_left,"luts_left");
+void LutGenerator::generateLuts() {
+    createLutsFile(this->rotTr[0], "luts_front");
+    createLutsFile(this->rotTr[1], "luts_right");
+    createLutsFile(this->rotTr[2], "luts_rear");
+    createLutsFile(this->rotTr[3], "luts_left");
 }
 
-Mat3x4 get_rot_tr(Mat3x3& homo)
+Mat3x4 LutGenerator::getRotTr(Mat3x3& homo)
 {
-    Mat3x4 rotation_translation_matrix = decompose_homography(homo);
-    if(current_mode == TOP_VIEW)
+    Mat3x4 rotation_translation_matrix = this->decomposeHomography(homo);
+    if(this->mode == TOP_VIEW)
         return rotation_translation_matrix;
     else
-        return rotation_translation_matrix * rotations[current_mode-1];
+        return rotation_translation_matrix * this->rotations[this->mode-1];
 }
 
-
-void generate_rot_t_mat(){
-    rot_t_front = get_rot_tr(homography_front);
-    rot_t_right = get_rot_tr(homography_right);
-    rot_t_rear = get_rot_tr(homography_rear);
-    rot_t_left = get_rot_tr(homography_left);
-}
-
-void set_mode (int mode)
-{
-    if(mode == 0)
-        current_mode = TOP_VIEW;
-    else if(mode == 1)
-        current_mode = FRONT_VIEW;
-    else if(mode == 2)
-        current_mode = RIGHT_VIEW;
-    else if(mode == 3)
-        current_mode = REAR_VIEW;
-    else if(mode == 4)
-        current_mode = LEFT_VIEW;
-    else
-        exit(mode);
-}
-
-void define_mode()
+void LutGenerator::defineMode()
 {
     cout << "Choose view:\n"
             "1 - Top view\n"
@@ -279,13 +266,6 @@ void define_mode()
             "4 - Rear view\n"
             "5 - Left view\n";
 
-    int mode = getc(stdin) - '0' - 1;
-    set_mode(mode);
-}
-
-void create_luts() {
-    define_mode();
-    inv_k_matrix = k_matrix.inv();
-    generate_rot_t_mat();
-    generate_luts();
+    int newMode = getc(stdin) - '0' - 1;
+    this->setMode(newMode);
 }

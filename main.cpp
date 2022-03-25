@@ -7,7 +7,11 @@
 using namespace cv;
 using namespace std;
 
-class Dataset dataset;
+const int c_height = 720;
+const int c_width = 632;
+
+class Dataset dataset(c_height, c_width);
+class LutGenerator luts(c_height, c_width);
 
 enum Sectors
 {
@@ -36,13 +40,13 @@ Vec3f bi_interpolation(const Mat& image, float x, float  y) {
 }
 
 Sectors define_zone(int x, int y) {
-    if (y <= dataset.getHeight() / 2 && x <= dataset.getWigth() / 2)
+    if (y <= dataset.imageParam->getHeight() / 2 && x <= dataset.imageParam->getWigth() / 2)
         return FRONT_LEFT;
-    else if (y <= dataset.getHeight() / 2 && (x >= dataset.getWigth() / 2))
+    else if (y <= dataset.imageParam->getHeight() / 2 && (x >= dataset.imageParam->getWigth() / 2))
         return FRONT_RIGHT;
-    else if ((y >= dataset.getHeight() / 2) && (x >= dataset.getWigth() / 2))
+    else if ((y >= dataset.imageParam->getHeight() / 2) && (x >= dataset.imageParam->getWigth() / 2))
         return BOTTOM_RIGHT;
-    else if ((y >= dataset.getHeight() / 2) && (x <= dataset.getWigth() / 2))
+    else if ((y >= dataset.imageParam->getHeight() / 2) && (x <= dataset.imageParam->getWigth() / 2))
         return BOTTOM_LEFT;
 }
 
@@ -80,8 +84,8 @@ Vec3f get_pixel_color(int x, int y) {
 }
 
 void  form_image() {
-    for (int y = 0; y < dataset.getHeight(); y++)
-        for (int x = 0; x < dataset.getWigth(); x++)
+    for (int y = 0; y < dataset.imageParam->getHeight(); y++)
+        for (int x = 0; x < dataset.imageParam->getWigth(); x++)
             dataset.setTopView(get_pixel_color(x, y),x,y);
 }
 
@@ -89,8 +93,8 @@ void read_luts(Mat& lut, const string& fileName, int channel) {
     ifstream coord_table;
     float coord;
     coord_table.open(fileName.c_str(), std::ifstream::in);
-    for(int j = 0; j< dataset.getHeight(); j++)
-        for (int i = 0; i < dataset.getWigth(); i++){
+    for(int j = 0; j< dataset.imageParam->getHeight(); j++)
+        for (int i = 0; i < dataset.imageParam->getWigth(); i++){
             coord_table >> coord;
             lut.at<Vec2f>(j,i)[channel] = coord;}
     coord_table.close();
@@ -99,10 +103,10 @@ void read_luts(Mat& lut, const string& fileName, int channel) {
 void get_luts()
 {
 
-    Mat lut_front(dataset.getHeight(),dataset.getWigth(), CV_32FC2);
-    Mat lut_right(dataset.getHeight(),dataset.getWigth(), CV_32FC2);
-    Mat lut_rear(dataset.getHeight(),dataset.getWigth(), CV_32FC2);
-    Mat lut_left(dataset.getHeight(),dataset.getWigth(), CV_32FC2);
+    Mat lut_front(dataset.imageParam->getHeight(),dataset.imageParam->getWigth(), CV_32FC2);
+    Mat lut_right(dataset.imageParam->getHeight(),dataset.imageParam->getWigth(), CV_32FC2);
+    Mat lut_rear(dataset.imageParam->getHeight(),dataset.imageParam->getWigth(), CV_32FC2);
+    Mat lut_left(dataset.imageParam->getHeight(),dataset.imageParam->getWigth(), CV_32FC2);
 
     read_luts(lut_front, string("luts_front_x.txt"), 0);
     read_luts(lut_front, string("luts_front_y.txt"), 1);
@@ -189,7 +193,9 @@ int main(int argc, char* argv[]) {
         cout << argv[1] << endl;
         read_images(string(argv[1])+"\\");
     }
-    create_luts();
+    luts.defineMode();
+    luts.setRotTr();
+    luts.generateLuts();
     //resize(dataset.alpha_map, dataset.alpha_map, dataset.getTopView().size(), 0, 0, INTER_LINEAR);
     get_luts();
     form_image();
@@ -198,3 +204,11 @@ int main(int argc, char* argv[]) {
     imwrite("view.png", dataset.getTopView());
     return 0;
 }
+
+
+/*void create_luts() {
+    define_mode();
+    inv_k_matrix = k_matrix.inv();
+    generate_rot_t_mat();
+    generate_luts();
+}*/

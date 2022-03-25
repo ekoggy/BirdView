@@ -6,21 +6,10 @@
 
 using namespace cv;
 
-Dataset::Dataset()
+Dataset::Dataset(int newHeight, int newWidth)
 {
-    this->height = 720;
-    this->width = 632;
-    this->top_view = Mat(this->height,this->width, CV_32FC3);
-}
-
-int Dataset::getHeight() const
-{
-    return this->height;
-}
-
-int Dataset::getWigth() const
-{
-    return this->width;
+    imageParam = new BaseParam(newHeight, newWidth);////////??????????
+    this->top_view = Mat(this->imageParam->getHeight(),this->imageParam->getWigth(), CV_32FC3);
 }
 
 cv::Mat Dataset::getLuts(int i, int j) const
@@ -57,7 +46,6 @@ void Dataset::setAlphaMap(const Mat& newAlphaMap)
 {
     this->alpha_map = newAlphaMap;
 }
-
 
 void Dataset::setTopView(const cv::Vec3f& newPixel, int i, int j)
 {
