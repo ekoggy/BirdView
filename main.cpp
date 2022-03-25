@@ -2,34 +2,12 @@
 #include <fstream>
 #include <iostream>
 #include "lutgen.h"
-
-//-DOpenCV_DIR=C:\openCV\opencv\mingw-build\install
+#include "dataset.h"
 
 using namespace cv;
 using namespace std;
 
-const int c_height = 720;
-const int c_width = 632;
-
-Mat front_image;
-Mat right_image;
-Mat rear_image;
-Mat left_image;
-Mat alpha_map;
-
-Mat dataset[4][2];
-
-Mat top_view(c_height,c_width, CV_32FC3);
-
-Mat lut_front(c_height,c_width, CV_32FC2);
-Mat lut_right(c_height,c_width, CV_32FC2);
-Mat lut_rear(c_height,c_width, CV_32FC2);
-Mat lut_left(c_height,c_width, CV_32FC2);
-
-Mat luts[4][2] = {{lut_front, lut_left},
-                  {lut_front, lut_right},
-                  {lut_rear, lut_right},
-                  {lut_rear, lut_left}};
+class Dataset dataset;
 
 enum Sectors
 {
@@ -58,13 +36,13 @@ Vec3f bi_interpolation(const Mat& image, float x, float  y) {
 }
 
 Sectors define_zone(int x, int y) {
-    if (y <= c_height / 2 && x <= c_width / 2)
+    if (y <= dataset.getHeight() / 2 && x <= dataset.getWigth() / 2)
         return FRONT_LEFT;
-    else if (y <= c_height / 2 && (x >= c_width / 2))
+    else if (y <= dataset.getHeight() / 2 && (x >= dataset.getWigth() / 2))
         return FRONT_RIGHT;
-    else if ((y >= c_height / 2) && (x >= c_width / 2))
+    else if ((y >= dataset.getHeight() / 2) && (x >= dataset.getWigth() / 2))
         return BOTTOM_RIGHT;
-    else if ((y >= c_height / 2) && (x <= c_width / 2))
+    else if ((y >= dataset.getHeight() / 2) && (x <= dataset.getWigth() / 2))
         return BOTTOM_LEFT;
 }
 
@@ -85,34 +63,34 @@ Vec3f mix_color(const Mat& white_image, const Mat& black_image,
 
 Point2f get_distort_point_from_luts(Sectors sector, int x, int y, int channel){
     Point2d points_from_lut;
-    points_from_lut.x = luts[sector][channel].at<Vec2f>(y,x)[0];
-    points_from_lut.y = luts[sector][channel].at<Vec2f>(y,x)[1];
+    points_from_lut.x = dataset.getLuts(sector, channel).at<Vec2f>(y,x)[0];
+    points_from_lut.y = dataset.getLuts(sector, channel).at<Vec2f>(y,x)[1];
     return points_from_lut;
 }
 
 Vec3f get_pixel_color(int x, int y) {
-    auto alpha = (float) alpha_map.at<unsigned char>(y,x);
+    auto alpha = (float) dataset.getAlphaMap().at<unsigned char>(y,x);
     alpha = normalize_double(alpha);
     Sectors sector = define_zone(x, y);
     Point2f white_distort_point, black_distort_point;
     white_distort_point = get_distort_point_from_luts(sector, x, y,0);
     black_distort_point = get_distort_point_from_luts(sector, x, y,1);
-    return mix_color(dataset[sector][0], dataset[sector][1],
+    return mix_color(dataset.getImages(sector,0), dataset.getImages(sector,1),
                      &white_distort_point, &black_distort_point, alpha);
 }
 
 void  form_image() {
-    for (int y = 0; y < c_height; y++)
-        for (int x = 0; x < c_width; x++)
-            top_view.at<Vec3f>(y,x) = get_pixel_color(x, y);
+    for (int y = 0; y < dataset.getHeight(); y++)
+        for (int x = 0; x < dataset.getWigth(); x++)
+            dataset.setTopView(get_pixel_color(x, y),x,y);
 }
 
 void read_luts(Mat& lut, const string& fileName, int channel) {
     ifstream coord_table;
     float coord;
     coord_table.open(fileName.c_str(), std::ifstream::in);
-    for(int j = 0; j< c_height; j++)
-        for (int i = 0; i < c_width; i++){
+    for(int j = 0; j< dataset.getHeight(); j++)
+        for (int i = 0; i < dataset.getWigth(); i++){
             coord_table >> coord;
             lut.at<Vec2f>(j,i)[channel] = coord;}
     coord_table.close();
@@ -120,6 +98,12 @@ void read_luts(Mat& lut, const string& fileName, int channel) {
 
 void get_luts()
 {
+
+    Mat lut_front(dataset.getHeight(),dataset.getWigth(), CV_32FC2);
+    Mat lut_right(dataset.getHeight(),dataset.getWigth(), CV_32FC2);
+    Mat lut_rear(dataset.getHeight(),dataset.getWigth(), CV_32FC2);
+    Mat lut_left(dataset.getHeight(),dataset.getWigth(), CV_32FC2);
+
     read_luts(lut_front, string("luts_front_x.txt"), 0);
     read_luts(lut_front, string("luts_front_y.txt"), 1);
     CV_Assert(!lut_front.empty());
@@ -136,10 +120,23 @@ void get_luts()
     read_luts(lut_left, string("luts_left_y.txt"), 1);
     CV_Assert(!lut_left.empty());
 
+    dataset.setLuts(lut_front,0,0);
+    dataset.setLuts(lut_front,1,0);
+    dataset.setLuts(lut_rear,2,0);
+    dataset.setLuts(lut_rear,3,0);
+    dataset.setLuts(lut_right,1,1);
+    dataset.setLuts(lut_right,2,1);
+    dataset.setLuts(lut_left,0,1);
+    dataset.setLuts(lut_left,3,1);
 }
 
 void read_images(const string& path)
 {
+    Mat front_image;
+    Mat right_image;
+    Mat rear_image;
+    Mat left_image;
+
     front_image = imread(path + "front.png");
     CV_Assert(!front_image.empty());
 
@@ -152,13 +149,17 @@ void read_images(const string& path)
     left_image = imread(path + "left.png");
     CV_Assert(!left_image.empty());
 
-    alpha_map = imread(path + "alpha.jpg", IMREAD_GRAYSCALE);
-    CV_Assert(!alpha_map.empty());
+    dataset.setAlphaMap(imread(path + "alpha.jpg", IMREAD_GRAYSCALE));
+    CV_Assert(!dataset.getAlphaMap().empty());
 
-    dataset[0][0] = dataset[1][0] = front_image;
-    dataset[1][1] = dataset[2][1] = right_image;
-    dataset[2][0] = dataset[3][0] = rear_image;
-    dataset[0][1] = dataset[3][1] = left_image;
+    dataset.setImages(front_image,0,0);
+    dataset.setImages(front_image,1,0);
+    dataset.setImages(right_image,1,1);
+    dataset.setImages(right_image,2,1);
+    dataset.setImages(rear_image,2,0);
+    dataset.setImages(rear_image,3,0);
+    dataset.setImages(left_image,0,1);
+    dataset.setImages(left_image,3,1);
 }
 
 void read_images()
@@ -188,14 +189,12 @@ int main(int argc, char* argv[]) {
         cout << argv[1] << endl;
         read_images(string(argv[1])+"\\");
     }
-
-    read_images();
     create_luts();
-    resize(alpha_map, alpha_map, top_view.size(), 0, 0, INTER_LINEAR);
+    //resize(dataset.alpha_map, dataset.alpha_map, dataset.getTopView().size(), 0, 0, INTER_LINEAR);
     get_luts();
     form_image();
-    imshow("Top_view", top_view);
+    imshow("Top_view", dataset.getTopView());
     waitKey(0);
-    imwrite("view.png", top_view);
+    imwrite("view.png", dataset.getTopView());
     return 0;
 }
